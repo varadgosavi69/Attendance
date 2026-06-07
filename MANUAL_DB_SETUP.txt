@@ -1,0 +1,42 @@
+========================================
+MANUAL DATABASE SETUP (if setup page fails)
+========================================
+
+Do this in phpMyAdmin so the app can connect to the database.
+
+1. Start XAMPP: Apache + MySQL (both green).
+
+2. Open in browser: http://localhost/phpmyadmin
+
+3. Click "New" in the left sidebar.
+   - Database name: attendance_db
+   - Collation: utf8mb4_unicode_ci
+   - Click "Create"
+
+4. Click "attendance_db" in the left sidebar to select it.
+
+5. Click the "Import" tab at the top.
+
+6. Click "Choose File" and select this file from your project:
+   C:\Users\Ayush\OneDrive\Desktop\ATTENDANCE\attendance-email-system\database\schema_mysql.sql
+
+   (Or from htdocs: C:\xampp\htdocs\attendance-email-system\database\schema_mysql.sql)
+
+7. Scroll down and click "Import" (or "Go").
+
+8. You should see "Import has been successfully finished".
+
+9. Make sure the app has a .env file in the project root with:
+   DB_HOST=localhost
+   DB_PORT=3306
+   DB_NAME=attendance_db
+   DB_USER=root
+   DB_PASS=
+
+   If you're running from htdocs, copy .env from your Desktop project into:
+   C:\xampp\htdocs\attendance-email-system\.env
+
+10. Open the app: http://localhost/attendance-email-system/public
+    Login: admin / password123
+
+========================================

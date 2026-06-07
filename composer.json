@@ -1,0 +1,14 @@
+{
+    "name": "college/attendance-email-system",
+    "description": "Automated daily attendance email notification system",
+    "require": {
+        "php": ">=7.4",
+        "phpmailer/phpmailer": "^6.8",
+        "vlucas/phpdotenv": "^5.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
