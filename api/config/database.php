@@ -45,6 +45,26 @@ return [
         ],
 
         'mysql' => [
+            // Read replica(s): SELECT queries are sent here. Falls back to the
+            // write connection's host when DB_READ_HOST is not set (e.g. testing).
+            'read' => [
+                'host' => [
+                    env('DB_READ_HOST', env('DB_HOST', '127.0.0.1')),
+                ],
+                'port' => env('DB_READ_PORT', env('DB_PORT', '3306')),
+            ],
+            // Write connection: INSERT/UPDATE/DELETE and any query inside a
+            // transaction always go to the primary.
+            'write' => [
+                'host' => [
+                    env('DB_HOST', '127.0.0.1'),
+                ],
+                'port' => env('DB_PORT', '3306'),
+            ],
+            // Keep using the write connection for a brief window after a write,
+            // so a user doesn't read their own stale write off a lagging replica.
+            'sticky' => true,
+
             'driver' => 'mysql',
             'url' => env('DB_URL'),
             'host' => env('DB_HOST', '127.0.0.1'),

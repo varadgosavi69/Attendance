@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    // Phase 6 — FastAPI detention-risk microservice (SCALABLE_ARCHITECTURE.md §8)
+    'ml_service' => [
+        'url'     => env('ML_SERVICE_URL', 'http://ml-service:8000'),
+        'timeout' => (int) env('ML_SERVICE_TIMEOUT', 10),
+    ],
+
 ];

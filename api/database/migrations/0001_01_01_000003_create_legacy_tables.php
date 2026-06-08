@@ -55,7 +55,7 @@ return new class extends Migration
                 $table->unsignedBigInteger('subject_id');
                 $table->unsignedBigInteger('faculty_id');
                 $table->date('attendance_date');
-                $table->enum('status', ['present', 'absent', 'late'])->default('absent');
+                $table->enum('status', ['Present', 'Absent', 'Leave'])->default('Absent');
                 $table->timestamp('marked_at')->nullable();
             });
         }

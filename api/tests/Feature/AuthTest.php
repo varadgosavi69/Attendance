@@ -25,7 +25,7 @@ class AuthTest extends TestCase
             'password_hash'   => Hash::make('password123'),
             'email'           => 'test@college.edu',
             'full_name'       => 'Test Teacher',
-            'role'            => 'faculty',
+            'role'            => 'teacher',
             'failed_attempts' => 0,
             'locked_until'    => null,
         ]);
@@ -258,7 +258,7 @@ class AuthTest extends TestCase
 
         $response->assertStatus(200)
                  ->assertJsonPath('data.email', 'test@college.edu')
-                 ->assertJsonPath('data.role', 'faculty');
+                 ->assertJsonPath('data.role', 'teacher');
     }
 
     public function test_me_without_token_returns_401(): void

@@ -16,7 +16,7 @@ return new class extends Migration
                 $table->string('password_hash', 255);
                 $table->string('email', 100)->unique();
                 $table->string('full_name', 100);
-                $table->enum('role', ['admin', 'faculty', 'hod', 'principal'])->default('faculty');
+                $table->enum('role', ['admin', 'teacher', 'hod', 'principal'])->default('teacher');
                 $table->unsignedBigInteger('faculty_id')->nullable();
                 $table->string('department', 50)->nullable();
                 $table->timestamp('last_login')->nullable();

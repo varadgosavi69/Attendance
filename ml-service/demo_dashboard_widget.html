@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Phase 6 Demo — Detention-Risk Widget (live API data)</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f6f9; margin: 0; padding: 32px; color: #1f2937; }
+  .note { max-width: 760px; margin: 0 auto 20px; font-size: 13px; color: #6b7280; line-height: 1.5; }
+  .note code { background: #e5e7eb; padding: 1px 5px; border-radius: 3px; }
+  .card { max-width: 760px; margin: 0 auto; background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.1); overflow: hidden; }
+  .card-header { padding: 18px 24px; border-bottom: 1px solid #eef0f3; display: flex; justify-content: space-between; align-items: baseline; }
+  .card-header h2 { margin: 0; font-size: 17px; }
+  .card-header span { font-size: 12px; color: #9ca3af; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; padding: 10px 24px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; border-bottom: 1px solid #eef0f3; }
+  td { padding: 12px 24px; border-bottom: 1px solid #f3f4f6; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge-high { background: #fee2e2; color: #b91c1c; }
+  .badge-med { background: #fef3c7; color: #92400e; }
+  .roll { color: #6b7280; font-size: 12px; }
+  .score { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .bar-track { background: #f3f4f6; border-radius: 4px; height: 6px; width: 100px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .bar-fill { background: #ef4444; height: 100%; }
+  footer { max-width: 760px; margin: 18px auto 0; font-size: 12px; color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<div class="note">
+  <strong>Phase 6 demo — not part of the frozen frontend.</strong> This static page renders the
+  exact JSON returned by the live <code>GET /api/v1/reports/dashboard</code> endpoint
+  (HOD role, department = CSE) after <code>PredictDetentionRiskJob</code> ran end-to-end against
+  the FastAPI <code>ml-service</code> and denormalized scores onto <code>students.risk_score</code>.
+  The neither the legacy PHP UI nor the React app were touched — this is a JSON-driven mockup only,
+  per the "backend-only + JSON demo" choice.
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>⚠ High Detention Risk — CSE Department</h2>
+    <span>risk_score &gt; 0.70 · sorted desc · top 10</span>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Student</th><th>Roll No.</th><th>Risk score</th><th>Last scored</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<footer>Source: live response captured from <code>http://127.0.0.1:8000/api/v1/reports/dashboard</code> · model <code>detention_v1</code></footer>
+
+<script>
+// Verbatim `data.high_risk_students` array from the captured live API response
+// (see ml-service/dashboard_response.json).
+const highRiskStudents = [
+  {"student_id":1,"student_name":"Ayush Gajbhiye","roll_number":"CSE22001","department":"CSE","risk_score":0.901,"risk_updated_at":"2026-06-08 16:53:13"},
+  {"student_id":3,"student_name":"Sneha Patil","roll_number":"CSE22003","department":"CSE","risk_score":0.899,"risk_updated_at":"2026-06-08 16:53:13"},
+  {"student_id":6,"student_name":"Karan Johar","roll_number":"CSE23001","department":"CSE","risk_score":0.899,"risk_updated_at":"2026-06-08 16:53:13"},
+  {"student_id":5,"student_name":"Nisha Gupta","roll_number":"CSE22005","department":"CSE","risk_score":0.882,"risk_updated_at":"2026-06-08 16:53:13"},
+  {"student_id":7,"student_name":"Juhi Chawla","roll_number":"CSE23002","department":"CSE","risk_score":0.882,"risk_updated_at":"2026-06-08 16:53:13"}
+];
+
+const tbody = document.getElementById('rows');
+for (const s of highRiskStudents) {
+  const pct = Math.round(s.risk_score * 100);
+  const badgeClass = s.risk_score >= 0.85 ? 'badge-high' : 'badge-med';
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><strong>${s.student_name}</strong><div class="roll">${s.department} · Student #${s.student_id}</div></td>
+    <td class="roll">${s.roll_number}</td>
+    <td>
+      <span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>
+      <span class="score">${s.risk_score.toFixed(3)}</span>
+      <span class="badge ${badgeClass}">${pct}%</span>
+    </td>
+    <td class="roll">${s.risk_updated_at}</td>
+  `;
+  tbody.appendChild(tr);
+}
+</script>
+
+</body>
+</html>

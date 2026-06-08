@@ -1,0 +1,21 @@
+[
+  {
+    "model_version": "detention_v1",
+    "trained_at": "2026-06-08T22:09:50",
+    "samples": {
+      "total": 21,
+      "train": 16,
+      "validation": 5
+    },
+    "class_balance": {
+      "detained": 11,
+      "not_detained": 10
+    },
+    "metrics": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "auc": 1.0
+    }
+  }
+]

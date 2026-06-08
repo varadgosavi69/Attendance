@@ -9,9 +9,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OA;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 
+#[OA\Tag(name: 'Auth', description: 'Authentication: login, token refresh, logout, current user')]
 class AuthController extends Controller
 {
     private const MAX_ATTEMPTS    = 5;
@@ -21,6 +23,32 @@ class AuthController extends Controller
     // ──────────────────────────────────────────────────────────────────────────
     // POST /api/v1/auth/login
     // ──────────────────────────────────────────────────────────────────────────
+    #[OA\Post(
+        path: '/auth/login',
+        summary: 'Log in with email/username and password, receiving a JWT access + refresh token pair',
+        tags: ['Auth'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(
+            required: ['email', 'password'],
+            properties: [
+                new OA\Property(property: 'email', type: 'string', description: 'Email or username', example: 'admin@college.edu'),
+                new OA\Property(property: 'password', type: 'string', format: 'password'),
+            ],
+        )),
+        responses: [
+            new OA\Response(response: 200, description: 'Login successful', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', properties: [
+                    new OA\Property(property: 'access_token', type: 'string'),
+                    new OA\Property(property: 'refresh_token', type: 'string'),
+                    new OA\Property(property: 'token_type', type: 'string', example: 'bearer'),
+                    new OA\Property(property: 'expires_in', type: 'integer', description: 'Seconds until access token expiry'),
+                    new OA\Property(property: 'user', type: 'object'),
+                ], type: 'object'),
+            ])),
+            new OA\Response(response: 401, description: 'Invalid credentials', content: new OA\JsonContent(ref: '#/components/schemas/ApiError')),
+            new OA\Response(response: 423, description: 'Account locked due to repeated failed attempts', content: new OA\JsonContent(ref: '#/components/schemas/ApiError')),
+        ],
+    )]
     public function login(Request $request): JsonResponse
     {
         $request->validate([
@@ -92,6 +120,27 @@ class AuthController extends Controller
     // ──────────────────────────────────────────────────────────────────────────
     // POST /api/v1/auth/refresh
     // ──────────────────────────────────────────────────────────────────────────
+    #[OA\Post(
+        path: '/auth/refresh',
+        summary: 'Exchange a valid refresh token for a new access + refresh token pair (rotates the refresh token)',
+        tags: ['Auth'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(
+            required: ['refresh_token'],
+            properties: [new OA\Property(property: 'refresh_token', type: 'string')],
+        )),
+        responses: [
+            new OA\Response(response: 200, description: 'New token pair issued', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', properties: [
+                    new OA\Property(property: 'access_token', type: 'string'),
+                    new OA\Property(property: 'refresh_token', type: 'string'),
+                    new OA\Property(property: 'token_type', type: 'string', example: 'bearer'),
+                    new OA\Property(property: 'expires_in', type: 'integer'),
+                ], type: 'object'),
+            ])),
+            new OA\Response(response: 401, description: 'Refresh token invalid, expired, or user not found', content: new OA\JsonContent(ref: '#/components/schemas/ApiError')),
+        ],
+    )]
     public function refresh(Request $request): JsonResponse
     {
         $request->validate(['refresh_token' => 'required|string']);
@@ -128,6 +177,21 @@ class AuthController extends Controller
     // ──────────────────────────────────────────────────────────────────────────
     // POST /api/v1/auth/logout
     // ──────────────────────────────────────────────────────────────────────────
+    #[OA\Post(
+        path: '/auth/logout',
+        summary: 'Log out — denylists the current access token and (optionally) revokes the refresh token',
+        security: [['bearerAuth' => []]],
+        tags: ['Auth'],
+        requestBody: new OA\RequestBody(required: false, content: new OA\JsonContent(
+            properties: [new OA\Property(property: 'refresh_token', type: 'string', nullable: true)],
+        )),
+        responses: [
+            new OA\Response(response: 200, description: 'Logged out', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', properties: [new OA\Property(property: 'message', type: 'string')], type: 'object'),
+            ])),
+        ],
+    )]
     public function logout(Request $request): JsonResponse
     {
         try {
@@ -158,6 +222,27 @@ class AuthController extends Controller
     // ──────────────────────────────────────────────────────────────────────────
     // GET /api/v1/auth/me
     // ──────────────────────────────────────────────────────────────────────────
+    #[OA\Get(
+        path: '/auth/me',
+        summary: 'Get the currently authenticated user',
+        security: [['bearerAuth' => []]],
+        tags: ['Auth'],
+        responses: [
+            new OA\Response(response: 200, description: 'Current user', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', properties: [
+                    new OA\Property(property: 'user_id', type: 'integer'),
+                    new OA\Property(property: 'username', type: 'string'),
+                    new OA\Property(property: 'email', type: 'string'),
+                    new OA\Property(property: 'full_name', type: 'string'),
+                    new OA\Property(property: 'role', type: 'string'),
+                    new OA\Property(property: 'faculty_id', type: 'integer', nullable: true),
+                    new OA\Property(property: 'department', type: 'string', nullable: true),
+                ], type: 'object'),
+            ])),
+            new OA\Response(response: 401, description: 'Invalid or expired token', content: new OA\JsonContent(ref: '#/components/schemas/ApiError')),
+        ],
+    )]
     public function me(): JsonResponse
     {
         try {

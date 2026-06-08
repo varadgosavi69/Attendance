@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\SendDailyAttendance;
+use App\Jobs\PredictDetentionRiskJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -15,3 +16,10 @@ Schedule::command(SendDailyAttendance::class)
     ->at('17:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/attendance-emails.log'));
+
+// Phase 6 — score every student's detention risk nightly via the ml-service
+// (SCALABLE_ARCHITECTURE.md §9: `ml:predict-risks` dailyAt('02:00'))
+Schedule::job(new PredictDetentionRiskJob())
+    ->dailyAt('02:00')
+    ->onOneServer()
+    ->withoutOverlapping();
