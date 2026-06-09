@@ -1,0 +1,167 @@
+version: '3.9'
+
+services:
+
+  # ── Nginx reverse proxy ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: attendance_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ../api:/var/www/api
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    networks:
+      - attendance_net
+
+  # ── Laravel API (PHP-FPM) ──────────────────────────────────────────────────
+  api:
+    build:
+      context: ./docker
+      dockerfile: api.Dockerfile
+    container_name: attendance_api
+    volumes:
+      - ../api:/var/www/api
+    environment:
+      - APP_ENV=local
+      - APP_KEY=${APP_KEY}
+      - DB_HOST=mysql-primary
+      - DB_PORT=3306
+      - DB_READ_HOST=mysql-replica
+      - DB_READ_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-attendance_db}
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - REDIS_HOST=redis
+      - CACHE_DRIVER=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - MAIL_MAILER=smtp
+      - MAIL_HOST=mailhog
+      - MAIL_PORT=1025
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-noreply@attendance.local}
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+      mysql-replica:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - attendance_net
+
+  # ── ML Service (FastAPI — detention-risk predictions, Phase 6) ─────────────
+  ml-service:
+    build:
+      context: ../ml-service
+      dockerfile: Dockerfile
+    container_name: attendance_ml_service
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_READ_HOST=mysql-replica
+      - DB_READ_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-attendance_db}
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DETENTION_THRESHOLD=${DETENTION_THRESHOLD:-75}
+    volumes:
+      - ../ml-service/trained_models:/app/trained_models
+    depends_on:
+      mysql-replica:
+        condition: service_healthy
+    networks:
+      - attendance_net
+
+  # ── MySQL 8 — primary (read/write) ─────────────────────────────────────────
+  mysql-primary:
+    image: mysql:8.0
+    container_name: attendance_mysql_primary
+    command: >
+      --server-id=1
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_DATABASE: ${DB_DATABASE:-attendance_db}
+    volumes:
+      - mysql_primary_data:/var/lib/mysql
+      - ./docker/mysql/primary-init.sql:/docker-entrypoint-initdb.d/00_replication_user.sql:ro
+      - ../database/schema_mysql.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ../database/migration_faculty_user_link.sql:/docker-entrypoint-initdb.d/02_faculty_link.sql:ro
+      - ../database/migration_detention.sql:/docker-entrypoint-initdb.d/03_detention.sql:ro
+      - ../database/migration_hod_principal.sql:/docker-entrypoint-initdb.d/04_hod_principal.sql:ro
+      - ../database/seed_data.sql:/docker-entrypoint-initdb.d/05_seed.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-secret}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendance_net
+
+  # ── MySQL 8 — replica (read-only, replicates from mysql-primary) ───────────
+  mysql-replica:
+    image: mysql:8.0
+    container_name: attendance_mysql_replica
+    command: >
+      --server-id=2
+      --relay-log=relay-bin
+      --read-only=ON
+      --super-read-only=ON
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_DATABASE: ${DB_DATABASE:-attendance_db}
+    volumes:
+      - mysql_replica_data:/var/lib/mysql
+      - ./docker/mysql/replica-init.sh:/docker-entrypoint-initdb.d/00_start_replication.sh:ro
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-secret}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendance_net
+
+  # ── Redis 7 ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: attendance_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - attendance_net
+
+  # ── MailHog (catches all outgoing email in dev) ────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: attendance_mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI → http://localhost:8025
+    networks:
+      - attendance_net
+
+volumes:
+  mysql_primary_data:
+  mysql_replica_data:
+  redis_data:
+
+networks:
+  attendance_net:
+    driver: bridge

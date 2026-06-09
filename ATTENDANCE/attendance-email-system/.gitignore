@@ -1,0 +1,13 @@
+# Dependencies
+/vendor/
+
+# Environment
+.env
+
+# Logs
+/logs/*.log
+server_log.txt
+
+# OS Files
+.DS_Store
+Thumbs.db

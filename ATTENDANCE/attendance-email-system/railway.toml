@@ -1,0 +1,58 @@
+# railway.toml — Railway deployment config for the Attendance System.
+#
+# This file configures the PRIMARY service (Laravel API).
+# The other services (worker, ml-service, frontend) are configured via the
+# Railway dashboard — see docs/DEPLOYMENT.md for step-by-step instructions.
+#
+# Railway documentation: https://docs.railway.app/reference/config-as-code
+
+[build]
+builder            = "DOCKERFILE"
+dockerfilePath     = "infrastructure/docker/api.Dockerfile"
+
+[deploy]
+healthcheckPath    = "/api/v1/health"
+healthcheckTimeout = 300
+numReplicas        = 1
+sleepApplication   = false
+restartPolicyType  = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# ── Other services — configure these in the Railway dashboard ─────────────────
+#
+# worker:
+#   Root Directory: ATTENDANCE/attendance-email-system/api
+#   Dockerfile:     infrastructure/docker/worker.Dockerfile
+#   No health check (background process)
+#
+# ml-service:
+#   Root Directory: ATTENDANCE/attendance-email-system/ml-service
+#   Dockerfile:     infrastructure/docker/ml-service.Dockerfile
+#   Health Check:   /health
+#
+# frontend:
+#   Root Directory: ATTENDANCE/attendance-email-system/frontend
+#   Dockerfile:     infrastructure/docker/frontend.Dockerfile
+#   Health Check:   /
+#
+# ── Required environment variables per service ────────────────────────────────
+#
+# API + Worker (shared):
+#   APP_KEY, APP_URL, APP_ENV=production, APP_DEBUG=false
+#   DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
+#   REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+#   JWT_SECRET, JWT_TTL=15, JWT_REFRESH_TTL=10080
+#   MAIL_MAILER=smtp, MAIL_HOST=smtp.resend.com, MAIL_PORT=587
+#   MAIL_USERNAME=resend, MAIL_PASSWORD=<RESEND_API_KEY>
+#   MAIL_FROM_ADDRESS=noreply@yourdomain.com
+#   ML_SERVICE_URL=<railway ml-service internal URL>
+#   CACHE_STORE=redis, SESSION_DRIVER=redis, QUEUE_CONNECTION=redis
+#   SENTRY_LARAVEL_DSN=  (optional — leave empty to disable)
+#
+# ml-service:
+#   DB_READ_HOST, DB_READ_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
+#   DETENTION_THRESHOLD=75
+#   SENTRY_DSN=  (optional)
+#
+# frontend:
+#   VITE_API_BASE_URL=<Railway API service URL>

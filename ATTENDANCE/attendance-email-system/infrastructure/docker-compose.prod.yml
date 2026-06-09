@@ -1,0 +1,280 @@
+# Production-mode docker-compose — local prod simulation.
+# Code is baked into images (no source bind mounts).
+# MySQL + Redis run as containers; email goes through Resend (SMTP).
+#
+# Usage:
+#   cp infrastructure/.env.prod.example infrastructure/.env.prod
+#   # fill in secrets in .env.prod
+#   docker-compose -f infrastructure/docker-compose.prod.yml --env-file infrastructure/.env.prod build
+#   docker-compose -f infrastructure/docker-compose.prod.yml --env-file infrastructure/.env.prod up -d
+#   docker-compose -f infrastructure/docker-compose.prod.yml exec api php artisan migrate --force
+
+version: '3.9'
+
+# Shared environment block for api + worker (both run Laravel, same config)
+x-api-env: &api-env
+  APP_NAME: "Attendance System"
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_KEY: ${APP_KEY}
+  APP_URL: ${APP_URL:-http://localhost}
+  LOG_CHANNEL: stack
+  LOG_LEVEL: warning
+  BCRYPT_ROUNDS: "12"
+
+  DB_CONNECTION: mysql
+  DB_HOST: mysql-primary
+  DB_PORT: "3306"
+  DB_READ_HOST: mysql-replica
+  DB_READ_PORT: "3306"
+  DB_DATABASE: ${DB_DATABASE:-attendance_db}
+  DB_USERNAME: ${DB_USERNAME:-appuser}
+  DB_PASSWORD: ${DB_PASSWORD}
+
+  REDIS_CLIENT: predis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+
+  # Resend SMTP — get a free API key at https://resend.com
+  MAIL_MAILER: smtp
+  MAIL_HOST: smtp.resend.com
+  MAIL_PORT: "587"
+  MAIL_USERNAME: resend
+  MAIL_PASSWORD: ${RESEND_API_KEY}
+  MAIL_ENCRYPTION: tls
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-noreply@yourdomain.com}
+  MAIL_FROM_NAME: "Attendance System"
+
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_TTL: "15"
+  JWT_REFRESH_TTL: "10080"
+
+  ML_SERVICE_URL: http://ml-service:8000
+  ML_SERVICE_TIMEOUT: "10"
+  DETENTION_THRESHOLD: ${DETENTION_THRESHOLD:-75}
+
+  SENTRY_LARAVEL_DSN: ${SENTRY_LARAVEL_DSN:-}
+  SENTRY_TRACES_SAMPLE_RATE: "0.1"
+
+services:
+
+  # ── Nginx — /api/* → PHP-FPM, /* → React SPA ─────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - attendance_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+
+  # ── React SPA (pre-built static files served by nginx:alpine) ────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../infrastructure/docker/frontend.Dockerfile
+    restart: unless-stopped
+    networks:
+      - attendance_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 32M
+
+  # ── Laravel API (PHP-FPM) ─────────────────────────────────────────────────
+  api:
+    build:
+      context: ../api
+      dockerfile: ../infrastructure/docker/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendance_net
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t 2>&1 | grep -q 'test is successful'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 256M
+
+  # ── Laravel Horizon queue worker ─────────────────────────────────────────
+  worker:
+    build:
+      context: ../api
+      dockerfile: ../infrastructure/docker/worker.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendance_net
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  # ── FastAPI ML microservice ───────────────────────────────────────────────
+  ml-service:
+    build:
+      context: ../ml-service
+      dockerfile: ../infrastructure/docker/ml-service.Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_READ_HOST: mysql-replica
+      DB_READ_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE:-attendance_db}
+      DB_USERNAME: ${DB_USERNAME:-appuser}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DETENTION_THRESHOLD: ${DETENTION_THRESHOLD:-75}
+      SENTRY_DSN: ${SENTRY_ML_DSN:-}
+      MODEL_DIR: trained_models
+      MODEL_VERSION: detention_v1
+    depends_on:
+      mysql-replica:
+        condition: service_healthy
+    networks:
+      - attendance_net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
+  # ── MySQL 8 primary (write) ───────────────────────────────────────────────
+  mysql-primary:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: >
+      --server-id=1
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE:-attendance_db}
+      MYSQL_USER: ${DB_USERNAME:-appuser}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_primary_data:/var/lib/mysql
+      - ./docker/mysql/primary-init.sql:/docker-entrypoint-initdb.d/00_replication_user.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - attendance_net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  # ── MySQL 8 replica (read-only) ───────────────────────────────────────────
+  mysql-replica:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: >
+      --server-id=2
+      --relay-log=relay-bin
+      --read-only=ON
+      --super-read-only=ON
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE:-attendance_db}
+    volumes:
+      - mysql_replica_data:/var/lib/mysql
+      - ./docker/mysql/replica-init.sh:/docker-entrypoint-initdb.d/00_start_replication.sh:ro
+    depends_on:
+      mysql-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - attendance_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  # ── Redis 7 ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - attendance_net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+volumes:
+  mysql_primary_data:
+  mysql_replica_data:
+  redis_data:
+
+networks:
+  attendance_net:
+    driver: bridge
