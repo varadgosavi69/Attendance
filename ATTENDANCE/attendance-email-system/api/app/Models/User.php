@@ -25,7 +25,6 @@ class User extends Authenticatable implements JWTSubject
         'faculty_id',
         'department',
         'last_login',
-        'last_login_at',
         'remember_token',
         'failed_attempts',
         'locked_until',
@@ -41,7 +40,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'created_at'      => 'datetime',
             'last_login'      => 'datetime',
-            'last_login_at'   => 'datetime',
+
             'locked_until'    => 'datetime',
             'failed_attempts' => 'integer',
         ];

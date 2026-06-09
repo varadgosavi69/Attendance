@@ -59,4 +59,4 @@ CREATE TABLE IF NOT EXISTS attendance (
 
 -- Seed Data (Test User: username 'admin', password 'password123')
 INSERT INTO users (username, password_hash, email, full_name, role) VALUES 
-('admin', '$2y$10$fVq97Pj.M/H.5eHqGvO6/.IqT6wL5.k3BvI/FqVfG0L6B5G8fGq6i', 'admin@college.edu', 'System Admin', 'admin');
+('admin', '$2y$10$9rBeRny5tKHIHK86WehZfup18k2CjGZxaCJJ3FWSQZbcwOpo6sOoq', 'admin@college.edu', 'System Admin', 'admin');

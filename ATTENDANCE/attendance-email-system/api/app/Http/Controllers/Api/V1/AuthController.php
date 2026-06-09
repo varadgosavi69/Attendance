@@ -92,7 +92,7 @@ class AuthController extends Controller
         $user->update([
             'failed_attempts' => 0,
             'locked_until'    => null,
-            'last_login_at'   => now(),
+            'last_login'      => now(),
         ]);
 
         // ── Issue JWT access token ────────────────────────────────────────────
