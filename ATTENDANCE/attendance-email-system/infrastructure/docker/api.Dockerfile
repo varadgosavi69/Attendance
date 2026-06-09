@@ -13,10 +13,11 @@ RUN composer install \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
-    --no-interaction
+    --no-interaction \
+    --ignore-platform-reqs
 
 COPY . .
-RUN composer dump-autoload --optimize --classmap-authoritative --no-dev
+RUN composer dump-autoload --optimize --classmap-authoritative --no-dev --no-scripts
 
 # ── Stage 2: PHP-FPM runtime (no build tools, minimal layers) ────────────────
 FROM php:8.3-fpm-alpine AS runtime

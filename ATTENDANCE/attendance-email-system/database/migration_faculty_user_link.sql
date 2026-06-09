@@ -29,4 +29,4 @@ INSERT IGNORE INTO faculty_subjects (faculty_id, subject_id) VALUES
 (4, 6); -- Rajesh -> Power Electronics
 
 -- 4. Link admin user to faculty_id=1 (Imran Sheikh)
-UPDATE users SET faculty_id = 1 WHERE username = 'admin';
+-- NOTE: This UPDATE is intentionally in 05_seed.sql (runs after faculty rows are inserted)

@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(100),
     role VARCHAR(20) DEFAULT 'teacher', -- 'admin', 'teacher'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_login TIMESTAMP NULL
+    last_login TIMESTAMP NULL,
+    failed_attempts INT NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP NULL DEFAULT NULL
 );
 
 -- Students table

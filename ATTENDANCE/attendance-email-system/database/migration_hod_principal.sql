@@ -2,7 +2,7 @@
 -- Run ONCE after initial setup.
 
 -- 1. Add department column to users (for HOD dept linkage)
-ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(50) NULL DEFAULT NULL AFTER faculty_id;
+ALTER TABLE users ADD COLUMN department VARCHAR(50) NULL DEFAULT NULL AFTER faculty_id;
 
 -- 2. HOD attendance summary table
 CREATE TABLE IF NOT EXISTS hod_attendance_summary (

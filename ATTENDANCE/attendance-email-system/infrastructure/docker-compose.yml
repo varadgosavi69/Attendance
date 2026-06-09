@@ -19,8 +19,8 @@ services:
   # ── Laravel API (PHP-FPM) ──────────────────────────────────────────────────
   api:
     build:
-      context: ./docker
-      dockerfile: api.Dockerfile
+      context: ../api
+      dockerfile: ../infrastructure/docker/api.Dockerfile
     container_name: attendance_api
     volumes:
       - ../api:/var/www/api
@@ -114,7 +114,6 @@ services:
       --server-id=2
       --relay-log=relay-bin
       --read-only=ON
-      --super-read-only=ON
       --gtid-mode=ON
       --enforce-gtid-consistency=ON
     ports:

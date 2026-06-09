@@ -41,6 +41,9 @@ INSERT INTO students (roll_number, student_name, email, department, semester) VA
 ('ME21002', 'Harshad Mehta', 'harshad@student.edu', 'ME', 6);
 
 -- Sample Batch 4: EE, Semester 4
-INSERT INTO students (roll_number, student_name, email, department, semester) VALUES 
+INSERT INTO students (roll_number, student_name, email, department, semester) VALUES
 ('EE22001', 'Nikola Tesla', 'tesla@student.edu', 'EE', 4),
 ('EE22002', 'Thomas Edison', 'edison@student.edu', 'EE', 4);
+
+-- 5. Link admin user to faculty_id=1 (Imran Sheikh) — must run after faculty rows are inserted
+UPDATE users SET faculty_id = 1 WHERE username = 'admin';
