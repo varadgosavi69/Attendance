@@ -41,5 +41,9 @@
         <env name="DB_READ_CONNECTION" value="sqlite" force="true"/>
         <env name="ML_SERVICE_URL" value="http://ml-service:8000"/>
         <env name="ML_SERVICE_TIMEOUT" value="5"/>
+        <env name="JWT_SECRET" value="testing-jwt-secret-do-not-use-in-production-32-chars-minimum"/>
+        <env name="APP_KEY" value="base64:vXKxBhRkV6mPLJBJVjqkLp/2qB7Q+0XJYbU2eL+xKKE="/>
+        <env name="JWT_TTL" value="60"/>
+        <env name="JWT_REFRESH_TTL" value="20160"/>
     </php>
 </phpunit>
