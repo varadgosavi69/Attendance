@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AxiosError } from 'axios';
 import { apiClient } from '../api/client';
 import type { ApiError, ApiSuccess, AttendanceStatus, Student, Subject } from '../types';
@@ -10,13 +10,14 @@ export function MarkAttendancePage() {
   const [subjectId, setSubjectId] = useState<number | ''>('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const [students, setStudents] = useState<Student[]>([]);
+  const [roster, setRoster] = useState<{ subjectId: number; students: Student[]; error: string | null } | null>(null);
   const [statuses, setStatuses] = useState<Record<number, AttendanceStatus>>({});
 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [loadingStudents, setLoadingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const selectedSubject = useMemo(() => subjects.find((s) => s.subject_id === subjectId), [subjects, subjectId]);
 
   useEffect(() => {
     apiClient
@@ -29,25 +30,32 @@ export function MarkAttendancePage() {
   }, []);
 
   useEffect(() => {
-    const subject = subjects.find((s) => s.subject_id === subjectId);
-    if (!subject) {
-      setStudents([]);
-      return;
-    }
+    if (!selectedSubject) return;
 
-    setLoadingStudents(true);
-    setError(null);
-    setMessage(null);
+    let cancelled = false;
 
     apiClient
-      .get<ApiSuccess<Student[]>>('/attendance/students', { params: { semester: subject.semester, branch: subject.department } })
+      .get<ApiSuccess<Student[]>>('/attendance/students', { params: { semester: selectedSubject.semester, branch: selectedSubject.department } })
       .then((response) => {
-        setStudents(response.data.data);
+        if (cancelled) return;
+        setRoster({ subjectId: selectedSubject.subject_id, students: response.data.data, error: null });
         setStatuses(Object.fromEntries(response.data.data.map((s) => [s.student_id, 'Present' as AttendanceStatus])));
       })
-      .catch((err: AxiosError<ApiError>) => setError(err.response?.data?.error?.message ?? 'Failed to load students.'))
-      .finally(() => setLoadingStudents(false));
-  }, [subjectId, subjects]);
+      .catch((err: AxiosError<ApiError>) => {
+        if (!cancelled) {
+          setRoster({ subjectId: selectedSubject.subject_id, students: [], error: err.response?.data?.error?.message ?? 'Failed to load students.' });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSubject]);
+
+  const currentRoster = selectedSubject && roster && roster.subjectId === selectedSubject.subject_id ? roster : null;
+  const students = currentRoster?.students ?? [];
+  const loadingStudents = selectedSubject !== undefined && currentRoster === null;
+  const displayError = currentRoster?.error ?? error;
 
   function setStatus(studentId: number, status: AttendanceStatus) {
     setStatuses((prev) => ({ ...prev, [studentId]: status }));
@@ -83,7 +91,14 @@ export function MarkAttendancePage() {
       <div className="filter-row">
         <label>
           Subject
-          <select value={subjectId} onChange={(e) => setSubjectId(e.target.value ? Number(e.target.value) : '')}>
+          <select
+            value={subjectId}
+            onChange={(e) => {
+              setSubjectId(e.target.value ? Number(e.target.value) : '');
+              setError(null);
+              setMessage(null);
+            }}
+          >
             {subjects.map((subject) => (
               <option key={subject.subject_id} value={subject.subject_id}>
                 {subject.subject_name} ({subject.subject_code}) — {subject.department} sem {subject.semester}
@@ -98,7 +113,7 @@ export function MarkAttendancePage() {
         </label>
       </div>
 
-      {error && <p className="form-error">{error}</p>}
+      {displayError && <p className="form-error">{displayError}</p>}
       {message && <p className="form-success">{message}</p>}
       {loadingStudents && <p>Loading students…</p>}
 

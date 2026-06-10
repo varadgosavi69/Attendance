@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { apiClient } from '../api/client';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import type { ApiError, ApiSuccess, DetainedStudent, PageMeta } from '../types';
 
 function lastMonth(): string {
@@ -10,39 +10,54 @@ function lastMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+interface DetentionReportResult {
+  key: string;
+  records: DetainedStudent[];
+  meta: PageMeta | null;
+  error: string | null;
+}
+
 export function DetentionReportPage() {
   const { user } = useAuth();
   const [month, setMonth] = useState(lastMonth);
-  const [records, setRecords] = useState<DetainedStudent[]>([]);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [report, setReport] = useState<DetentionReportResult | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [sendEmails, setSendEmails] = useState(false);
 
-  function load() {
-    setLoading(true);
-    setError(null);
+  const queryKey = `${month}#${refreshKey}`;
+
+  useEffect(() => {
+    let cancelled = false;
 
     apiClient
       .get<ApiSuccess<DetainedStudent[]> & { meta: PageMeta }>('/reports/detention', { params: { month } })
       .then((response) => {
-        setRecords(response.data.data);
-        setMeta(response.data.meta);
+        if (cancelled) return;
+        setReport({ key: queryKey, records: response.data.data, meta: response.data.meta, error: null });
       })
-      .catch((err: AxiosError<ApiError>) => setError(err.response?.data?.error?.message ?? 'Failed to load detention report.'))
-      .finally(() => setLoading(false));
-  }
+      .catch((err: AxiosError<ApiError>) => {
+        if (!cancelled) {
+          setReport({ key: queryKey, records: [], meta: null, error: err.response?.data?.error?.message ?? 'Failed to load detention report.' });
+        }
+      });
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
+    return () => {
+      cancelled = true;
+    };
+  }, [month, queryKey]);
+
+  const loaded = report && report.key === queryKey ? report : null;
+  const loading = !loaded;
+  const records = loaded?.records ?? [];
+  const meta = loaded?.meta ?? null;
+  const error = loaded ? (loaded.error ?? generateError) : null;
 
   async function handleGenerate() {
     setGenerating(true);
-    setError(null);
+    setGenerateError(null);
     setMessage(null);
 
     const [year, monthNum] = month.split('-').map(Number);
@@ -58,10 +73,10 @@ export function DetentionReportPage() {
           (sendEmails ? `, ${emails_queued} email(s) queued, ${emails_skipped} skipped` : '') +
           '.',
       );
-      load();
+      setRefreshKey((key) => key + 1);
     } catch (err) {
       if (err instanceof AxiosError) {
-        setError(err.response?.data?.error?.message ?? 'Failed to generate detention report.');
+        setGenerateError(err.response?.data?.error?.message ?? 'Failed to generate detention report.');
       }
     } finally {
       setGenerating(false);
@@ -75,7 +90,14 @@ export function DetentionReportPage() {
       <div className="filter-row">
         <label>
           Month
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setGenerateError(null);
+            }}
+          />
         </label>
 
         {user?.role === 'principal' && (

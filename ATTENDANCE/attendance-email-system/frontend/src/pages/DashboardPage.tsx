@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { apiClient } from '../api/client';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import type { ApiError, ApiSuccess, DashboardSummary } from '../types';
 
 function formatLabel(key: string): string {

@@ -1,16 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { ApiError, User } from '../types';
 import { clearTokens, fetchMe, getAccessToken, getRefreshToken, login as loginRequest, logout as logoutRequest, storeTokens } from '../api/client';
 import { AxiosError } from 'axios';
-
-interface AuthContextValue {
-  user: User | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+import { AuthContext } from './auth-context';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -50,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       if (err instanceof AxiosError) {
         const apiError = err.response?.data as ApiError | undefined;
-        throw new Error(apiError?.error?.message ?? 'Login failed.');
+        throw new Error(apiError?.error?.message ?? 'Login failed.', { cause: err });
       }
       throw err;
     }
@@ -67,10 +59,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return <AuthContext.Provider value={{ user, isLoading, login, logout }}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
-  return ctx;
 }

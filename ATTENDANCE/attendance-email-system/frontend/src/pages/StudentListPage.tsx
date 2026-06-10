@@ -3,19 +3,23 @@ import { AxiosError } from 'axios';
 import { apiClient } from '../api/client';
 import type { ApiError, ApiSuccess, PageMeta, Student } from '../types';
 
+interface StudentListResult {
+  key: string;
+  students: Student[];
+  meta: PageMeta | null;
+  error: string | null;
+}
+
 export function StudentListPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [page, setPage] = useState(1);
   const [department, setDepartment] = useState('');
   const [semester, setSemester] = useState<number | ''>('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState<StudentListResult | null>(null);
+
+  const queryKey = `${page}|${department}|${semester}`;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     apiClient
       .get<ApiSuccess<Student[]> & { meta: PageMeta }>('/students', {
@@ -27,20 +31,24 @@ export function StudentListPage() {
       })
       .then((response) => {
         if (cancelled) return;
-        setStudents(response.data.data);
-        setMeta(response.data.meta);
+        setResult({ key: queryKey, students: response.data.data, meta: response.data.meta, error: null });
       })
       .catch((err: AxiosError<ApiError>) => {
-        if (!cancelled) setError(err.response?.data?.error?.message ?? 'Failed to load students.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setResult({ key: queryKey, students: [], meta: null, error: err.response?.data?.error?.message ?? 'Failed to load students.' });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [page, department, semester]);
+  }, [page, department, semester, queryKey]);
+
+  const loaded = result && result.key === queryKey ? result : null;
+  const loading = !loaded;
+  const students = loaded?.students ?? [];
+  const meta = loaded?.meta ?? null;
+  const error = loaded?.error ?? null;
 
   const totalPages = meta ? Math.max(1, Math.ceil(meta.total / meta.per_page)) : 1;
 
