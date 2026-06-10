@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Detention;
+use App\Repositories\Concerns\UsesReadConnection;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
@@ -12,7 +13,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
  */
 class DetentionRepository
 {
-    private const READ_CONNECTION = 'mysql::read';
+    use UsesReadConnection;
 
     /**
      * Paginated list of detained students for a month, worst attendance first.
@@ -25,7 +26,7 @@ class DetentionRepository
     {
         $monthStart = "{$yearMonth}-01";
 
-        return Detention::on(self::READ_CONNECTION)
+        return Detention::on(self::readConnection())
             ->with('student:student_id,student_name,roll_number,email,department,semester')
             ->whereDate('month', $monthStart)
             ->where('is_detained', true)

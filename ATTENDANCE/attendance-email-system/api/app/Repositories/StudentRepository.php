@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Student;
+use App\Repositories\Concerns\UsesReadConnection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  */
 class StudentRepository
 {
-    private const READ_CONNECTION = 'mysql::read';
+    use UsesReadConnection;
 
     /**
      * Roster for a department + semester — populates the "mark attendance" student list.
@@ -25,7 +26,7 @@ class StudentRepository
         return Cache::remember(
             "students:dept:{$department}:sem:{$semester}",
             now()->addMinutes(30),
-            fn () => Student::on(self::READ_CONNECTION)
+            fn () => Student::on(self::readConnection())
                 ->select('student_id', 'student_name', 'roll_number')
                 ->where('department', $department)
                 ->where('semester', $semester)
@@ -41,7 +42,7 @@ class StudentRepository
      */
     public function countsByDepartment(): Collection
     {
-        return Student::on(self::READ_CONNECTION)
+        return Student::on(self::readConnection())
             ->select('department', DB::raw('COUNT(*) as count'))
             ->groupBy('department')
             ->orderBy('department')
@@ -58,7 +59,7 @@ class StudentRepository
      */
     public function topDetentionRisks(int $limit = 10, ?string $department = null): Collection
     {
-        return Student::on(self::READ_CONNECTION)
+        return Student::on(self::readConnection())
             ->select('student_id', 'student_name', 'roll_number', 'department', 'semester', 'risk_score', 'risk_updated_at')
             ->where('risk_score', '>', 0.7)
             ->when($department, fn ($query) => $query->where('department', $department))
@@ -69,11 +70,11 @@ class StudentRepository
 
     public function countAll(): int
     {
-        return Student::on(self::READ_CONNECTION)->count();
+        return Student::on(self::readConnection())->count();
     }
 
     public function countForDepartment(string $department): int
     {
-        return Student::on(self::READ_CONNECTION)->where('department', $department)->count();
+        return Student::on(self::readConnection())->where('department', $department)->count();
     }
 }
