@@ -19,6 +19,10 @@ return [
 
     'default' => env('DB_CONNECTION', 'sqlite'),
 
+    // Named read connection used by AttendanceRepository. In production this is
+    // 'mysql::read' (the replica). In test (SQLite) override via DB_READ_CONNECTION.
+    'read_connection' => env('DB_READ_CONNECTION', 'mysql::read'),
+
     /*
     |--------------------------------------------------------------------------
     | Database Connections

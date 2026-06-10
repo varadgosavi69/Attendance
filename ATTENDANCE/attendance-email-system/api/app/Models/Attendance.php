@@ -11,6 +11,10 @@ class Attendance extends Model
 
     public $timestamps = false; // table uses marked_at, not created_at/updated_at
 
+    // DATE columns store only the date portion; without this, Eloquent serializes
+    // dates as 'Y-m-d H:i:s' which breaks updateOrCreate's WHERE clause in SQLite.
+    protected $dateFormat = 'Y-m-d';
+
     protected $fillable = [
         'student_id',
         'subject_id',

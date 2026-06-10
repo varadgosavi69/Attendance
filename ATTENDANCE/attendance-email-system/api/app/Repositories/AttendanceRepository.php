@@ -16,7 +16,10 @@ use Illuminate\Support\Facades\DB;
  */
 class AttendanceRepository
 {
-    private const READ_CONNECTION = 'mysql::read';
+    private static function rc(): string
+    {
+        return config('database.read_connection', 'mysql::read');
+    }
 
     /**
      * Per-subject breakdown of one student's attendance for a calendar month.
@@ -32,7 +35,7 @@ class AttendanceRepository
                 $monthStart = "{$yearMonth}-01";
                 $monthEnd = Carbon::parse($monthStart)->endOfMonth()->toDateString();
 
-                return Attendance::on(self::READ_CONNECTION)
+                return Attendance::on(self::rc())
                     ->join('subjects', 'attendance.subject_id', '=', 'subjects.subject_id')
                     ->where('attendance.student_id', $studentId)
                     ->whereBetween('attendance.attendance_date', [$monthStart, $monthEnd])
@@ -55,7 +58,7 @@ class AttendanceRepository
         return Cache::remember(
             "faculty:subjects:{$facultyId}",
             now()->addHour(),
-            fn () => DB::connection(self::READ_CONNECTION)
+            fn () => DB::connection(self::rc())
                 ->table('subjects')
                 ->join('faculty_subjects', 'subjects.subject_id', '=', 'faculty_subjects.subject_id')
                 ->where('faculty_subjects.faculty_id', $facultyId)
@@ -78,7 +81,7 @@ class AttendanceRepository
             now()->addMinutes(5),
             fn () => [
                 'avg_attendance' => $this->averageAttendance($department),
-                'recent_summaries' => DB::connection(self::READ_CONNECTION)
+                'recent_summaries' => DB::connection(self::rc())
                     ->table('hod_attendance_summary')
                     ->where('department', $department)
                     ->orderByDesc('date')
@@ -95,7 +98,7 @@ class AttendanceRepository
      */
     public function recentActivity(int $limit = 5): Collection
     {
-        return Attendance::on(self::READ_CONNECTION)
+        return Attendance::on(self::rc())
             ->with(['student:student_id,student_name', 'subject:subject_id,subject_name'])
             ->orderByDesc('marked_at')
             ->limit($limit)
@@ -110,7 +113,7 @@ class AttendanceRepository
      */
     public function todayStatusCounts(?string $department = null): array
     {
-        $query = Attendance::on(self::READ_CONNECTION)->whereDate('attendance_date', today());
+        $query = Attendance::on(self::rc())->whereDate('attendance_date', today());
 
         if ($department !== null) {
             $query->whereHas('student', fn ($q) => $q->where('department', $department));
@@ -127,7 +130,7 @@ class AttendanceRepository
      */
     public function subjectsMarkedToday(): int
     {
-        return Attendance::on(self::READ_CONNECTION)
+        return Attendance::on(self::rc())
             ->whereDate('attendance_date', today())
             ->distinct('subject_id')
             ->count('subject_id');
@@ -138,7 +141,7 @@ class AttendanceRepository
      */
     public function averageAttendance(?string $department = null): float
     {
-        $query = Attendance::on(self::READ_CONNECTION);
+        $query = Attendance::on(self::rc());
 
         if ($department !== null) {
             $query->whereHas('student', fn ($q) => $q->where('department', $department));

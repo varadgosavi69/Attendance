@@ -13,7 +13,10 @@ return new class extends Migration
     {
         Schema::create('detention_predictions', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('student_id');
+            // students.student_id is a signed INT (legacy schema_mysql.sql),
+            // so the FK column must match exactly (type + signedness) or
+            // MySQL rejects the foreign key with errno 3780.
+            $table->integer('student_id');
             $table->timestamp('predicted_at')->useCurrent();
             $table->decimal('risk_score', 4, 3);
             $table->boolean('predicted_detention');

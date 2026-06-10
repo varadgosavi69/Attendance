@@ -10,7 +10,10 @@ return new class extends Migration
     {
         Schema::create('email_logs', function (Blueprint $table) {
             $table->id('log_id');
-            $table->unsignedBigInteger('student_id');
+            // students.student_id is a signed INT (legacy schema_mysql.sql),
+            // so the FK column must match exactly (type + signedness) or
+            // MySQL rejects the foreign key with errno 3780.
+            $table->integer('student_id');
             $table->string('recipient_email');
             $table->enum('email_type', ['daily_attendance', 'detention_notice', 'monthly_report']);
             $table->enum('status', ['queued', 'sent', 'failed'])->default('queued');

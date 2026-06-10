@@ -1,164 +1,36 @@
-# 2-Minute Interview Demo Script
+# 3-Minute Interview Demo Script
 
-A walkthrough you can run live in front of an interviewer. Each section has a cue, what to show, and what to say.
+A live walkthrough for an interview or portfolio review. Follow the timeline
+top to bottom — each row is roughly the stated duration. Have a terminal,
+this repo, and a browser ready before you start.
 
----
-
-## Before the call (setup)
-
-```bash
-# Ensure the stack is running
-cd ATTENDANCE/attendance-email-system
-docker-compose -f infrastructure/docker-compose.yml up -d
-
-# Confirm health
-curl -s http://localhost:8000/api/v1/health | python3 -m json.tool
-```
-
-Have open in your browser:
-- http://localhost:3000 (React frontend)
-- http://localhost:8025 (MailHog)
-- A terminal with the project root
-
----
-
-## Section 1 — Architecture overview (20 sec)
-
-**What to show:** The repo in your IDE or the folder structure.
-
-**What to say:**
-> "This is a full-stack attendance management system for a college — it's an 8-phase modernization of a legacy PHP monolith.
-> The stack is Laravel 11 API with JWT auth, a React SPA, a Python FastAPI microservice for ML-based detention prediction,
-> and a MySQL primary/replica setup. Everything runs in Docker and is deployable to Railway."
-
----
-
-## Section 2 — Health endpoint (20 sec)
-
-**What to show:** Run in terminal:
+**Before the call:**
 
 ```bash
-curl -s http://localhost:8000/api/v1/health | python3 -m json.tool
+cd ATTENDANCE/attendance-email-system/infrastructure
+docker-compose up -d
+docker-compose ps   # confirm all 7 containers are healthy
 ```
 
-**What to say:**
-> "I added a health-check endpoint that verifies all four sub-systems at once — database, Redis, the queue connection, and the ML service.
-> If any one of them is down, the endpoint returns HTTP 503 so a load balancer or CI smoke test can detect degradation immediately."
+Have these open in your browser: `docs/architecture.md`, Horizon
+(`http://localhost/horizon`), and MailHog (`http://localhost:8025`).
 
-**What it looks like (expected output):**
-```json
-{
-  "success": true,
-  "data": {
-    "status": "ok",
-    "checks": {
-      "database": { "status": "ok" },
-      "redis":    { "status": "ok" },
-      "queue":    { "status": "ok", "pending_jobs": 0 },
-      "ml":       { "status": "ok", "model_loaded": true }
-    }
-  }
-}
-```
+| Time | Action | Words to say |
+|------|--------|---------------|
+| 0:00–0:30 | Open `docs/architecture.md`. Point at the ASCII diagram. | "This is a four-tier system: Nginx at the edge, a stateless Laravel API behind it, a Redis-backed async tier running Horizon for queued jobs, and a MySQL primary/replica data tier. There's also a separate FastAPI microservice for ML detention-risk scoring that talks to the replica over HTTP." |
+| 0:30–0:45 | In a terminal: `docker-compose ps` | "Here's the running stack — Nginx, the Laravel API, a Horizon worker, two MySQL instances (primary and read replica), Redis, MailHog for catching dev email, and the ML service. Because the API is stateless and JWT-authenticated, I could put a load balancer in front of multiple API containers and scale horizontally without touching session state." |
+| 0:45–1:15 | `curl -s -X POST http://localhost/api/v1/auth/login -H "Content-Type: application/json" -d '{"email":"admin@jdcollege.edu.in","password":"password"}' \| python3 -m json.tool` | "Logging in returns a short-lived 15-minute access token plus a 7-day refresh token. The refresh token is tracked in Redis, and logout adds the access token's JTI to a Redis denylist — so unlike plain JWT, logout actually revokes the token instead of just deleting it client-side." |
+| 1:15–2:00 | `curl -X POST http://localhost/api/v1/attendance -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"subject_id":1,"date":"2026-06-10","records":[{"student_id":1,"status":"absent"}]}'` then switch to Horizon, then MailHog | "Marking a student absent writes the attendance row and queues a `SendAttendanceEmailJob` — the API responds immediately. Here in Horizon you can see the job get picked up and processed by the worker. And here in MailHog is the resulting parent-notification email, with the `email_logs` row marked as sent. In production this same job sends through Resend's SMTP instead of MailHog." |
+| 2:00–2:30 | `curl -s -X POST http://localhost:8000/predict/detention-risk -H "Content-Type: application/json" -d '{"student_ids":[1,2,3]}' \| python3 -m json.tool` | "This calls the FastAPI ML service directly — it builds seven features per student: current attendance %, three trend windows, department average, subject-variance, and longest absence streak, then runs them through an XGBoost classifier. **Note:** the model checked into this repo is currently trained on a 21-row synthetic dataset for development — retraining on the full seeded 200-student dataset is the next piece of Phase 6 work, tracked in the README roadmap and model card." |
+| 2:30–2:50 | `curl -s -H "Authorization: Bearer $TOKEN" http://localhost/api/v1/reports/detention \| python3 -m json.tool` | "This is the detention report endpoint — HODs and the principal use it to see which students in their department have crossed below the 75% threshold, paginated with a `meta.total` count. If the predictions endpoint above is wired into the dashboard, this is also where the model's risk scores would surface for proactive outreach, ahead of the actual threshold being crossed." |
+| 2:50–3:00 | Switch back to `docs/architecture.md` or the README roadmap section | "The biggest open items are retraining the detention model on real seeded data, finishing the read-replica indexing/partitioning work, and building out the React frontend — the API and ML service are the parts I focused on for this phase." |
 
----
+## If something fails live
 
-## Section 3 — JWT authentication (25 sec)
-
-**What to show:** Run in terminal:
-
-```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@jdcollege.edu.in","password":"password"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['access_token'])")
-
-echo "Token: ${TOKEN:0:40}..."
-
-curl -s -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8000/api/v1/auth/me | python3 -m json.tool
-```
-
-**What to say:**
-> "Authentication is JWT — stateless, so the API scales horizontally without sticky sessions.
-> The access token lives 15 minutes; refresh tokens are 7-day and stored in a Redis denylist,
-> so logout actually works — not just client-side token deletion."
-
----
-
-## Section 4 — ML detention risk (25 sec)
-
-**What to show:** Navigate to `ml-service/` and run:
-
-```bash
-curl -s http://localhost:8001/health | python3 -m json.tool
-```
-
-Then show the notebook or trained model file:
-
-```bash
-ls ml-service/trained_models/
-# → detention_v1.joblib  metrics.json
-
-cat ml-service/trained_models/metrics.json
-```
-
-**What to say:**
-> "Phase 6 added a Python FastAPI microservice that runs an XGBoost classifier to predict which students are at risk of detention
-> before they actually fall below the 75% threshold. Laravel calls it async via a queued job so the HTTP response
-> isn't blocked. The model is retrained weekly on historical data. It's a separate container so the ML team
-> can update the model independently of the web app."
-
----
-
-## Section 5 — Queue and email (15 sec)
-
-**What to show:** Open MailHog at http://localhost:8025.
-
-Then trigger a test email (or show the Horizon dashboard if available at http://localhost:8000/horizon):
-
-```bash
-curl -s -X POST http://localhost:8000/api/v1/attendance \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"subject_id":1,"date":"2026-06-09","records":[{"student_id":1,"status":"absent"}]}'
-```
-
-**What to say:**
-> "Attendance emails are dispatched to a Redis-backed queue and processed by Laravel Horizon.
-> The HTTP response returns immediately — the interviewer sees 200 OK in under 100ms while
-> the worker sends the email in the background. In production this swaps to Resend's SMTP gateway."
-
----
-
-## Section 6 — CI pipeline (15 sec)
-
-**What to show:** Open GitHub Actions tab on the repo (or show the `.github/workflows/ci.yml` file).
-
-**What to say:**
-> "Every push runs PHPUnit, the React build + lint, and pytest for the ML service.
-> Then it builds all four Docker images to catch Dockerfile regressions.
-> Nothing deploys automatically — Railway is triggered separately on merge to main.
-> The test matrix runs in parallel so the whole CI pipeline finishes in about 3 minutes."
-
----
-
-## Fallback — if something is broken
-
-| Problem | Fallback |
-|---------|----------|
-| Docker is down | Open `SCALABLE_ARCHITECTURE.md` — walk through the architecture diagram in the doc instead |
-| DB not seeded | `docker-compose exec api php artisan db:seed` then retry |
-| ML service not responding | Show `ml-service/app/routes/predict.py` and `trained_models/metrics.json` instead |
-| JWT login fails | Show the `AuthController.php` code and explain the flow |
-| MailHog empty | Point to the `SendAttendanceEmailJob.php` and explain the async dispatch pattern |
-
----
-
-## Talking points (if asked to go deeper)
-
-- **Why Laravel over Node.js?** — Built-in Eloquent ORM, Horizon for queues, Form Requests for validation — less boilerplate for a CRUD-heavy domain.
-- **Why JWT over sessions?** — Stateless auth supports horizontal scaling; Redis denylist solves the "you can't revoke a JWT" problem.
-- **Why XGBoost for detention?** — Handles non-linear patterns in attendance trend data; interpretable feature importances; trains in seconds on this dataset size.
-- **Why read replica?** — Keeps analytics/reporting queries off the write path; `config/database.php` routes SELECT queries automatically.
-- **Why Resend over SES?** — Free tier (3k/month), no card, no domain verification required for sandbox — faster to demo.
+| Problem | What to say / do |
+|---------|-------------------|
+| A container restarts or shows unhealthy mid-demo | "One of the containers is restarting — that's actually a good moment to point at the Horizon/health-check setup: in production this would trigger an alert via Sentry rather than silently failing." Run `docker-compose ps` again after a few seconds; most services recover on their own. If not, fall back to walking through `docs/architecture.md` and the code instead of live calls. |
+| Internet is slow / curl hangs | Everything in this demo runs against `localhost` — no external network calls are required except the optional Resend SMTP in production (which isn't used locally; MailHog is). If a command hangs, Ctrl+C and re-run; if it's still slow, narrate from the code instead (`AttendanceController.php`, `SendAttendanceEmailJob.php`). |
+| ML service isn't responding / model not loaded | Skip the live `curl` and instead open `ml-service/app/models/detention_risk.py` to walk through the feature list, and `ml-service/trained_models/metrics.json` to show the last training run. Be upfront: "the model artifact here is a development placeholder — it hasn't been retrained on the seeded dataset yet." |
+| MailHog inbox is empty | Point at `app/Jobs/SendAttendanceEmailJob.php` and `email_logs` table schema instead, and explain the dispatch flow from `docs/architecture.md`'s sequence diagram. |
+| JWT login fails (wrong seed data, etc.) | Open `docs/demo-credentials.md` to confirm the exact seeded email/password, or fall back to `AuthController.php` and walk through the login → JWT → Redis denylist flow from the architecture doc. |

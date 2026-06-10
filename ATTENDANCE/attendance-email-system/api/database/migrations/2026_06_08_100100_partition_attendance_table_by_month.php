@@ -30,6 +30,10 @@ return new class extends Migration
 
     public function up(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         if ($this->isPartitioned()) {
             return;
         }
@@ -49,6 +53,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         if (! $this->isPartitioned()) {
             return;
         }
@@ -83,11 +91,15 @@ return new class extends Migration
     /** @return list<string> constraint names of FKs currently defined on `attendance` */
     private function existingForeignKeys(): array
     {
+        // Alias to a lowercase name explicitly: MySQL returns
+        // information_schema column names in uppercase (CONSTRAINT_NAME),
+        // which doesn't match stdClass::$constraint_name on the result rows.
         return DB::table('information_schema.table_constraints')
             ->whereRaw('table_schema = DATABASE()')
             ->where('table_name', self::TABLE)
             ->where('constraint_type', 'FOREIGN KEY')
-            ->pluck('constraint_name')
+            ->select('constraint_name as name')
+            ->pluck('name')
             ->all();
     }
 

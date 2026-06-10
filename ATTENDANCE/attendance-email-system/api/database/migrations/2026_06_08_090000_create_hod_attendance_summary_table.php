@@ -23,7 +23,10 @@ return new class extends Migration
             $table->unsignedInteger('total_students')->default(0);
             $table->unsignedInteger('present_count')->default(0);
             $table->decimal('attendance_percentage', 5, 2)->default(0.00);
-            $table->unsignedBigInteger('uploaded_by');
+            // users.user_id is a signed INT (legacy schema_mysql.sql), so the
+            // FK column must match exactly (type + signedness) or MySQL
+            // rejects the foreign key with errno 3780.
+            $table->integer('uploaded_by');
             $table->timestamp('uploaded_at')->useCurrent()->useCurrentOnUpdate();
 
             $table->unique(['department', 'semester', 'date'], 'uniq_dept_sem_date');
