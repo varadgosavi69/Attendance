@@ -1,66 +1,84 @@
-# 🎓 College Attendance Email Notification System
+# Attendance Management System
 
-A premium web-based portal for teachers to manage student attendance and automate daily reporting. Built with a focus on ease of use, aesthetics, and handling records at scale.
+Production-grade refactor of a monolithic PHP attendance system into a
+Laravel 11 + microservices architecture. Tracks classroom attendance,
+queues automated parent emails for absentees, and surfaces detention-risk
+predictions via a FastAPI ML service.
 
-## ✨ Core Features
+## Status
 
-- **Premium Teacher Portal**: 
-    - 💎 Glassmorphism design for a modern, professional look.
-    - 📊 Real-time Dashboard with attendance insights.
-    - 🔍 Advanced filtering by Year, Branch, and Semester.
-- **Smart Management**:
-    - 👥 Student Management with bulk CSV upload.
-    - 📚 Subject Management with easy CSV import.
-- **Automation & Logs**:
-    - 📨 **Automated Reports**: Sends personalized emails to both present and absent students.
-    - 🖱️ **One-Click Trigger**: Send all daily reports directly from the web portal.
-    - 📜 **System Logs**: View execution history and delivery status directly in the browser.
-    - 🪟 **Windows Utility**: One-click `.bat` script for manual automation triggers.
+**v1.0.0** — 138 / 138 PHPUnit tests passing, all CI jobs green.
 
-## 🛠️ System Requirements
+## What changed in the refactor
 
-- **PHP**: 7.4 or higher
-- **MySQL/MariaDB**: 5.7+ (Recommended for XAMPP)
-- **Composer**: For dependency management
-- **Web Server**: Apache (XAMPP) or PHP built-in server
+The original system was raw PHP per page with inline SQL, blocking
+PHPMailer SMTP, and no separation of concerns. The refactor follows a
+strangler-fig migration into:
 
-## ⚙️ Setup & Installation
+- **Laravel 11 API** — JWT auth, Eloquent models, service / repository layers
+- **Redis-backed async email queue** via Laravel Horizon (removes SMTP from request path)
+- **MySQL primary + read replica** with a `UsesReadConnection` abstraction
+- **FastAPI ML microservice** for detention-risk inference
+- **Docker Compose** orchestration of all services (7 containers)
+- **GitHub Actions CI** with isolated service containers for production parity
 
-### 1. Database Configuration
-1. Open **phpMyAdmin** (`http://localhost/phpmyadmin`).
-2. Create a database named `attendance_db`.
-3. Import `database/schema_mysql.sql` into the new database.
-4. *Note: If using XAMPP on port 3307, ensure your `.env` reflects this.*
+Full architecture rationale: [`SCALABLE_ARCHITECTURE.md`](SCALABLE_ARCHITECTURE.md)
 
-### 2. Environment Setup
-Copy `.env.example` to `.env` and configure:
-- `DB_HOST`, `DB_PORT` (3306 or 3307), `DB_NAME`, `DB_USER`, `DB_PASS`.
-- `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` (Use Gmail App Password).
-- `COLLEGE_NAME` to your institution's name.
+## Repository layout
 
-### 3. Install Dependencies
-```bash
-composer install
+```
+.
+├── ATTENDANCE/
+│   └── attendance-email-system/      ← the project lives here
+│       ├── api/                      ← Laravel 11 application
+│       ├── ml-service/               ← FastAPI / XGBoost service
+│       ├── frontend/                 ← React / TypeScript scaffold
+│       ├── infrastructure/           ← Docker Compose, nginx
+│       ├── docs/                     ← architecture, known issues, model card
+│       └── scripts/                  ← smoke tests, demo seeders
+├── SCALABLE_ARCHITECTURE.md          ← migration design doc
+├── .github/workflows/                ← CI pipeline
+└── README.md
 ```
 
-### 4. Run the Project
-- **Option A (XAMPP)**: Move the folder to `C:\xampp\htdocs\` and visit `http://localhost/attendance-email-system/public`.
-- **Option B (PHP Server)**: Run `php -S localhost:8000 -t public` in the project root.
+## Quick start
 
-## 🚀 Usage
+```bash
+cd ATTENDANCE/attendance-email-system
+docker compose -f infrastructure/docker-compose.yml up -d
+curl http://localhost/api/v1/health
+```
 
-1. **Login**: Use your default administrator credentials.
-2. **Mark Attendance**: Navigate to the "Attendance" page, select filters, and mark students.
-3. **Send Emails**: 
-    - Go to the **Logs** page and click **"Send Daily Reports Now"**.
-    - Or run the **`Run_Attendance_Mailer.bat`** file from the root folder.
+Wait ~30 seconds for all 7 services to become healthy. The smoke test at
+`scripts/smoke_test.sh` exercises the full request path.
 
-## 📂 Project Structure
-- `public/`: Web root (UI, API endpoints).
-- `src/`: Backend logic (Database, Attendance Processor, Email Sender).
-- `cron/`: Core automation script logic.
-- `logs/`: Daily execution logs.
-- `database/`: SQL schemas and seed data.
+## Running tests
 
----
-*Created for JD College Engineering & Management*
+```bash
+# Laravel API — 138 tests, ~95s
+cd ATTENDANCE/attendance-email-system/api
+php artisan test
+
+# FastAPI ML service — 55 tests, 82% coverage
+cd ../ml-service
+pytest
+```
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Backend API | Laravel 11 (PHP 8.3) |
+| Auth | tymon/jwt-auth, Redis denylist |
+| Queue | Laravel Horizon, Redis driver |
+| Email (dev / prod) | MailHog / Resend SMTP |
+| Primary DB | MySQL 8 |
+| Read replica | MySQL 8 (separate container) |
+| ML service | FastAPI, scikit-learn, XGBoost |
+| Observability | Sentry |
+| Deployment | Docker Compose locally; Railway (optional) |
+
+## Author
+
+Bobby — [@varadgosavi69](https://github.com/varadgosavi69)  
+CSE / AIML engineering student, J D College of Engineering & Management.

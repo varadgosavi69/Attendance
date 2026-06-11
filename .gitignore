@@ -11,3 +11,6 @@ server_log.txt
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Editor
+.vscode/
