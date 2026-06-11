@@ -14,3 +14,12 @@ Thumbs.db
 
 # Editor
 .vscode/
+
+# AI agent / IDE configs (not part of the project)
+.claude/
+.cursor/
+.aider/
+.continue/
+.windsurf/
+.codeium/
+.copilot/
